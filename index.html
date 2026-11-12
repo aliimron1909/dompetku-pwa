@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <title>DompetKu — Pencatat Keuangan & Hutang Piutang</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Lock Screen Overlay (PIN 4-6 digit + Fingerprint WebAuthn) -->
+  <div id="lock-screen" class="lock-screen hidden" role="dialog" aria-modal="true">
+    <div class="lock-card">
+      <div id="lock-avatar" class="lock-avatar">D</div>
+      <div style="font-weight: 800; font-size: 18px;" id="lock-user-name">DompetKu Terkunci</div>
+      <div style="font-size: 12.5px; color: #94a3b8; margin-top: 4px;" id="lock-hint">Masukkan PIN 4–6 digit atau gunakan sidik jari</div>
+      <div class="pin-dots" id="pin-dots">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+      <div id="lock-error" style="color: #fca5a5; font-size: 12px; min-height: 18px;"></div>
+      <div class="pin-pad" id="pin-pad">
+        <button type="button" class="pin-key" data-digit="1">1</button>
+        <button type="button" class="pin-key" data-digit="2">2</button>
+        <button type="button" class="pin-key" data-digit="3">3</button>
+        <button type="button" class="pin-key" data-digit="4">4</button>
+        <button type="button" class="pin-key" data-digit="5">5</button>
+        <button type="button" class="pin-key" data-digit="6">6</button>
+        <button type="button" class="pin-key" data-digit="7">7</button>
+        <button type="button" class="pin-key" data-digit="8">8</button>
+        <button type="button" class="pin-key" data-digit="9">9</button>
+        <button type="button" class="pin-key action" id="btn-biometric-unlock" title="Buka dengan Sidik Jari">👆 Sidik Jari</button>
+        <button type="button" class="pin-key" data-digit="0">0</button>
+        <button type="button" class="pin-key action" id="btn-pin-backspace">⌫ Hapus</button>
+      </div>
+      <button type="button" class="btn btn-primary" id="btn-pin-submit" style="width: 100%; margin-top: 14px;">Buka Aplikasi</button>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div class="app-shell">
+    <!-- Desktop Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="./icon.svg" alt="DompetKu" />
+        <div>
+          <div class="brand-title">DompetKu</div>
+          <div class="brand-sub">Keuangan &amp; Hutang Piutang</div>
+        </div>
+      </div>
+
+      <nav class="nav-list" id="desktop-nav">
+        <button class="nav-btn active" data-tab="dashboard"><span class="nav-icon">📊</span> Dashboard</button>
+        <button class="nav-btn" data-tab="transactions"><span class="nav-icon">💸</span> Transaksi</button>
+        <button class="nav-btn" data-tab="debts"><span class="nav-icon">🤝</span> Hutang &amp; Piutang</button>
+        <button class="nav-btn" data-tab="budget"><span class="nav-icon">🎯</span> Budget &amp; Rutin</button>
+        <button class="nav-btn" data-tab="reports"><span class="nav-icon">📑</span> Laporan</button>
+        <button class="nav-btn" data-tab="settings"><span class="nav-icon">⚙️</span> Pengaturan</button>
+      </nav>
+
+      <div style="margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn-ai btn-sm" id="sidebar-quick-ai">⚡ Isi Cepat AI (Groq)</button>
+        <button class="btn btn-sm" id="sidebar-lock-btn" style="display:none;">🔒 Kunci Aplikasi</button>
+      </div>
+    </aside>
+
+    <!-- Main Area -->
+    <div class="main-area">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="user-greet">
+          <div id="topbar-avatar" class="avatar">U</div>
+          <div style="min-width:0;">
+            <div class="greet-title" id="topbar-greeting">Halo, Pengguna!</div>
+            <div class="greet-sub" id="topbar-date">Ringkasan keuangan Anda hari ini</div>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button type="button" class="sync-pill" id="sync-status-btn" title="Klik untuk sinkronisasi Google Sheets">
+            <span class="sync-dot"></span>
+            <span id="sync-status-text">Lokal</span>
+          </button>
+          <button type="button" class="btn btn-ai btn-sm" id="btn-open-quick-ai">⚡ AI Cepat</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-open-tx-modal">+ Transaksi</button>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="content">
+
+        <!-- ==================== TAB 1: DASHBOARD ==================== -->
+        <section id="tab-dashboard" class="tab-section active">
+          <!-- KPI Row -->
+          <div class="grid-4">
+            <div class="card">
+              <div class="kpi-label">Total Saldo Aktif</div>
+              <div class="kpi-value" id="dash-total-balance">Rp 0</div>
+              <div class="kpi-sub" id="dash-account-count">0 rekening aktif</div>
+            </div>
+            <div class="card">
+              <div class="kpi-label">Pemasukan Bulan Ini</div>
+              <div class="kpi-value text-success" id="dash-month-income">Rp 0</div>
+              <div class="kpi-sub" id="dash-month-label">-</div>
+            </div>
+            <div class="card">
+              <div class="kpi-label">Pengeluaran Bulan Ini</div>
+              <div class="kpi-value text-danger" id="dash-month-expense">Rp 0</div>
+              <div class="kpi-sub" id="dash-tx-count">0 transaksi</div>
+            </div>
+            <div class="card">
+              <div class="kpi-label">Selisih Bersih Bulan Ini</div>
+              <div class="kpi-value" id="dash-month-net">Rp 0</div>
+              <div class="kpi-sub">Pemasukan − Pengeluaran</div>
+            </div>
+          </div>
+
+          <!-- Hutang & Piutang Summary Banner -->
+          <div class="card mt-16">
+            <div class="card-header">
+              <h3 class="card-title">🤝 Ringkasan Hutang &amp; Piutang Aktif</h3>
+              <button type="button" class="btn btn-sm" data-goto-tab="debts">Kelola Hutang &amp; Piutang →</button>
+            </div>
+            <div class="grid-3">
+              <div style="padding: 12px; border-radius: 10px; background: var(--danger-soft);">
+                <div class="kpi-label">Total Hutang Aktif (Kewajiban)</div>
+                <div class="kpi-value text-danger" id="dash-active-hutang">Rp 0</div>
+                <div class="kpi-sub" id="dash-hutang-count">0 catatan aktif</div>
+              </div>
+              <div style="padding: 12px; border-radius: 10px; background: var(--success-soft);">
+                <div class="kpi-label">Total Piutang Aktif (Hak Tagih)</div>
+                <div class="kpi-value text-success" id="dash-active-piutang">Rp 0</div>
+                <div class="kpi-sub" id="dash-piutang-count">0 catatan aktif</div>
+              </div>
+              <div style="padding: 12px; border-radius: 10px; background: var(--info-soft);">
+                <div class="kpi-label">Selisih Bersih (Net Balance)</div>
+                <div class="kpi-value text-info" id="dash-debt-net">Rp 0</div>
+                <div class="kpi-sub">Piutang Aktif − Hutang Aktif</div>
+              </div>
+            </div>
+            <div id="dash-upcoming-debts" class="mt-12"></div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="grid-2 mt-16">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">📈 Tren Pemasukan vs Pengeluaran (6 Bulan)</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chart-trend"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🍩 Rincian Pengeluaran Kategori (Bulan Ini)</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chart-category"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accounts & Budget Summary Row -->
+          <div class="grid-2 mt-16">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">💳 Saldo per Rekening</h3>
+                <button type="button" class="btn btn-sm" data-goto-tab="settings">Atur Rekening</button>
+              </div>
+              <div id="dash-accounts-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px;"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🎯 Ringkasan Budget Bulanan</h3>
+                <button type="button" class="btn btn-sm" data-goto-tab="budget">Detail Budget</button>
+              </div>
+              <div id="dash-budget-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            </div>
+          </div>
+
+          <!-- Recent Transactions -->
+          <div class="card mt-16">
+            <div class="card-header">
+              <h3 class="card-title">🕒 Transaksi Terakhir</h3>
+              <button type="button" class="btn btn-sm" data-goto-tab="transactions">Lihat Semua →</button>
+            </div>
+            <div id="dash-recent-tx"></div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 2: TRANSAKSI ==================== -->
+        <section id="tab-transactions" class="tab-section">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">💸 Daftar Transaksi</h3>
+              <div class="flex-gap">
+                <button type="button" class="btn btn-ai btn-sm" id="tx-btn-quick-ai">⚡ Isi Cepat AI</button>
+                <button type="button" class="btn btn-sm" id="tx-btn-chat-ai">💬 Chat AI Transaksi</button>
+                <button type="button" class="btn btn-primary btn-sm" id="tx-btn-add">+ Tambah / Transfer</button>
+              </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Cari Catatan</label>
+                <input type="text" id="tx-filter-search" class="input" placeholder="Ketik kata kunci..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Jenis</label>
+                <select id="tx-filter-type" class="select">
+                  <option value="all">Semua Jenis</option>
+                  <option value="income">Pemasukan</option>
+                  <option value="expense">Pengeluaran</option>
+                  <option value="transfer">Transfer Antar Rekening</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Rekening</label>
+                <select id="tx-filter-account" class="select">
+                  <option value="all">Semua Rekening</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Kategori</label>
+                <select id="tx-filter-category" class="select">
+                  <option value="all">Semua Kategori</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Dari Tanggal</label>
+                <input type="date" id="tx-filter-start" class="input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Sampai Tanggal</label>
+                <input type="date" id="tx-filter-end" class="input" />
+              </div>
+            </div>
+
+            <div class="flex-between mb-12">
+              <div class="text-muted" style="font-size: 12.5px;" id="tx-result-info">Menampilkan 0 transaksi</div>
+              <div class="flex-gap">
+                <button type="button" class="btn btn-sm" id="tx-filter-reset">Reset Filter</button>
+                <select id="tx-page-size" class="select" style="width: auto; padding: 5px 10px;">
+                  <option value="10">10 / hal</option>
+                  <option value="25">25 / hal</option>
+                  <option value="50">50 / hal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Jenis</th>
+                    <th>Kategori / Info</th>
+                    <th>Rekening</th>
+                    <th>Catatan</th>
+                    <th style="text-align:right;">Nominal</th>
+                    <th style="text-align:right;">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tx-table-body"></tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="flex-between mt-12">
+              <div id="tx-page-indicator" class="text-muted" style="font-size: 12.5px;">Halaman 1 dari 1</div>
+              <div class="flex-gap">
+                <button type="button" class="btn btn-sm" id="tx-prev-page">← Sebelumnya</button>
+                <button type="button" class="btn btn-sm" id="tx-next-page">Berikutnya →</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 3: HUTANG & PIUTANG ==================== -->
+        <section id="tab-debts" class="tab-section">
+          <!-- Summary Cards -->
+          <div class="grid-3">
+            <div class="card">
+              <div class="kpi-label">Total Hutang Aktif (Saya Pinjam)</div>
+              <div class="kpi-value text-danger" id="debt-kpi-hutang">Rp 0</div>
+              <div class="kpi-sub" id="debt-kpi-hutang-sub">0 kewajiban belum lunas</div>
+            </div>
+            <div class="card">
+              <div class="kpi-label">Total Piutang Aktif (Dipinjamkan)</div>
+              <div class="kpi-value text-success" id="debt-kpi-piutang">Rp 0</div>
+              <div class="kpi-sub" id="debt-kpi-piutang-sub">0 tagihan belum lunas</div>
+            </div>
+            <div class="card">
+              <div class="kpi-label">Selisih Bersih (Net Balance)</div>
+              <div class="kpi-value" id="debt-kpi-net">Rp 0</div>
+              <div class="kpi-sub">Total Piutang Aktif − Total Hutang Aktif</div>
+            </div>
+          </div>
+
+          <div class="card mt-16">
+            <div class="card-header">
+              <h3 class="card-title">🤝 Daftar Hutang &amp; Piutang</h3>
+              <div class="flex-gap">
+                <button type="button" class="btn btn-sm" id="btn-export-debts-csv">📄 Ekspor CSV</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-add-debt">+ Catat Hutang / Piutang</button>
+              </div>
+            </div>
+
+            <!-- Filters & Sort -->
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Cari Kontak / Catatan</label>
+                <input type="text" id="debt-filter-search" class="input" placeholder="Nama orang / catatan..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Klasifikasi</label>
+                <select id="debt-filter-type" class="select">
+                  <option value="all">Semua (Hutang &amp; Piutang)</option>
+                  <option value="hutang">Hutang (Payable)</option>
+                  <option value="piutang">Piutang (Receivable)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select id="debt-filter-status" class="select">
+                  <option value="active">Semua Aktif (Belum Lunas / Dicicil / Jatuh Tempo)</option>
+                  <option value="all">Semua Status (Termasuk Lunas)</option>
+                  <option value="Belum Lunas">Belum Lunas</option>
+                  <option value="Dicicil">Dicicil</option>
+                  <option value="Jatuh Tempo">Jatuh Tempo</option>
+                  <option value="Lunas">Lunas</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Urutkan</label>
+                <select id="debt-sort-by" class="select">
+                  <option value="due_asc">Jatuh Tempo Terdekat</option>
+                  <option value="remaining_desc">Sisa Tagihan Terbesar</option>
+                  <option value="date_desc">Transaksi Terbaru</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="debts-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 4: BUDGET & TRANSAKSI BERULANG ==================== -->
+        <section id="tab-budget" class="tab-section">
+          <div class="grid-2">
+            <!-- Monthly Budget -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🎯 Budget Bulanan</h3>
+                <div class="flex-gap">
+                  <input type="month" id="budget-month-picker" class="input" style="width: auto; padding: 6px 10px;" />
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-budget">+ Atur Budget</button>
+                </div>
+              </div>
+              <div id="budget-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            </div>
+
+            <!-- Recurring Rules -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🔁 Transaksi Berulang</h3>
+                <div class="flex-gap">
+                  <button type="button" class="btn btn-sm" id="btn-run-recurring-now" title="Proses aturan yang sudah jatuh tempo">▶ Proses Jatuh Tempo</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-recurring">+ Aturan Baru</button>
+                </div>
+              </div>
+              <p class="text-muted" style="font-size: 12.5px; margin-top: 0;">
+                Transaksi otomatis dibuat saat aplikasi dibuka atau dilanjutkan jika sudah memasuki tanggal jadwal berikutnya.
+              </p>
+              <div id="recurring-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 5: LAPORAN ==================== -->
+        <section id="tab-reports" class="tab-section">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📑 Laporan Keuangan</h3>
+              <div class="flex-gap">
+                <button type="button" class="btn btn-sm" id="btn-export-report-csv">📊 Ekspor CSV</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-export-report-pdf">🖨️ Ekspor PDF</button>
+              </div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Periode Laporan</label>
+                <select id="report-period" class="select">
+                  <option value="daily">Harian (Hari Ini)</option>
+                  <option value="weekly">Mingguan (7 Hari Terakhir)</option>
+                  <option value="monthly" selected>Bulanan (Bulan Ini)</option>
+                  <option value="yearly">Tahunan (Tahun Ini)</option>
+                  <option value="custom">Kustom (Pilih Tanggal)</option>
+                </select>
+              </div>
+              <div class="form-group" id="report-custom-start-wrap" style="display:none;">
+                <label class="form-label">Tanggal Mulai</label>
+                <input type="date" id="report-start" class="input" />
+              </div>
+              <div class="form-group" id="report-custom-end-wrap" style="display:none;">
+                <label class="form-label">Tanggal Selesai</label>
+                <input type="date" id="report-end" class="input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Filter Jenis</label>
+                <select id="report-type" class="select">
+                  <option value="all">Semua Jenis</option>
+                  <option value="income">Pemasukan</option>
+                  <option value="expense">Pengeluaran</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Filter Rekening</label>
+                <select id="report-account" class="select">
+                  <option value="all">Semua Rekening</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Report KPIs -->
+            <div class="grid-4 mb-12">
+              <div class="card" style="background: var(--surface-2);">
+                <div class="kpi-label">Total Pemasukan</div>
+                <div class="kpi-value text-success" id="rep-income">Rp 0</div>
+              </div>
+              <div class="card" style="background: var(--surface-2);">
+                <div class="kpi-label">Total Pengeluaran</div>
+                <div class="kpi-value text-danger" id="rep-expense">Rp 0</div>
+              </div>
+              <div class="card" style="background: var(--surface-2);">
+                <div class="kpi-label">Selisih Bersih</div>
+                <div class="kpi-value" id="rep-net">Rp 0</div>
+              </div>
+              <div class="card" style="background: var(--surface-2);">
+                <div class="kpi-label">Jumlah Transaksi</div>
+                <div class="kpi-value" id="rep-count">0</div>
+              </div>
+            </div>
+
+            <div class="grid-2 mt-16">
+              <div>
+                <h4 style="margin: 0 0 10px;">Ringkasan per Kategori</h4>
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Kategori</th>
+                        <th>Jenis</th>
+                        <th style="text-align:right;">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rep-cat-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <h4 style="margin: 0 0 10px;">Rincian Transaksi Periode Ini</h4>
+                <div class="table-wrap" style="max-height: 360px; overflow-y: auto;">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Tanggal</th>
+                        <th>Kategori / Catatan</th>
+                        <th>Rekening</th>
+                        <th style="text-align:right;">Nominal</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rep-tx-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 6: PENGATURAN ==================== -->
+        <section id="tab-settings" class="tab-section">
+          <div class="grid-2">
+            <!-- Local Profile -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">👤 Profil Lokal &amp; Tema</h3>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+                <div id="settings-avatar-preview" class="avatar" style="width: 64px; height: 64px; font-size: 24px;">U</div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label class="btn btn-sm" style="cursor:pointer;">
+                    📷 Ganti Foto Profil
+                    <input type="file" id="input-profile-photo" accept="image/*" style="display:none;" />
+                  </label>
+                  <button type="button" class="btn btn-danger btn-sm" id="btn-remove-photo">Hapus Foto</button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Nama Tampilan (Dipakai di Dashboard &amp; PDF)</label>
+                <div class="flex-gap">
+                  <input type="text" id="input-profile-name" class="input" placeholder="Nama Anda" />
+                  <button type="button" class="btn btn-primary" id="btn-save-profile">Simpan</button>
+                </div>
+              </div>
+
+              <div class="form-group mt-12">
+                <label class="form-label">Tema Tampilan</label>
+                <select id="select-theme" class="select">
+                  <option value="light">☀️ Tema Terang</option>
+                  <option value="dark">🌙 Tema Gelap</option>
+                  <option value="system">💻 Ikuti Sistem</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Google Sheets Cloud Sync -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">☁️ Koneksi Cloud Google Sheets</h3>
+                <button type="button" class="btn btn-sm" id="btn-copy-gas-code">📋 Salin Code.gs</button>
+              </div>
+              <p class="text-muted" style="font-size: 12.5px; margin-top: 0;">
+                Terhubung aktif saat online untuk menyinkronkan Transaksi, Rekening, Kategori, Budget, Transaksi Berulang, dan Hutang &amp; Piutang dua arah.
+              </p>
+              <div class="form-group">
+                <label class="form-label">URL Web App Google Apps Script</label>
+                <input type="url" id="input-gas-url" class="input" placeholder="https://script.google.com/macros/s/.../exec" />
+              </div>
+              <div class="toggle-row mt-12">
+                <div>
+                  <div style="font-weight: 700; font-size: 13.5px;">Auto-Sync Saat Online</div>
+                  <div class="text-muted" style="font-size: 12px;">Otomatis sinkron setiap perubahan data &amp; saat koneksi kembali</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="toggle-auto-sync" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="flex-gap mt-12">
+                <button type="button" class="btn btn-primary" id="btn-save-sync-now">🔄 Simpan &amp; Sinkronkan Sekarang</button>
+              </div>
+              <div id="last-sync-info" class="text-muted mt-12" style="font-size: 12px;">Belum pernah disinkronkan.</div>
+            </div>
+
+            <!-- Groq AI Configuration -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🤖 Konfigurasi AI (Groq)</h3>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Groq API Key (Disimpan lokal di browser)</label>
+                <input type="password" id="input-groq-key" class="input" placeholder="gsk_..." />
+              </div>
+              <div class="form-group mt-12">
+                <label class="form-label">Model Chat Aktif Groq</label>
+                <div class="flex-gap">
+                  <select id="select-groq-model" class="select" style="flex:1;">
+                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                  </select>
+                  <button type="button" class="btn btn-sm" id="btn-fetch-groq-models">🔍 Cek Model Groq</button>
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary mt-12" id="btn-save-groq">Simpan Pengaturan AI</button>
+            </div>
+
+            <!-- Security PIN & Fingerprint -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">🔐 Keamanan (PIN &amp; Fingerprint)</h3>
+              </div>
+              <p class="text-muted" style="font-size: 12px; margin-top: 0;">
+                PIN 4–6 digit selalu menjadi fallback. Fingerprint memakai WebAuthn platform authenticator dan berfungsi sebagai kunci tampilan aplikasi (UI lock), bukan enkripsi database.
+              </p>
+              <div class="form-group">
+                <label class="form-label">Atur / Ubah PIN (4–6 Digit Angka)</label>
+                <div class="flex-gap">
+                  <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="input-new-pin" class="input" placeholder="Contoh: 123456" />
+                  <button type="button" class="btn btn-primary" id="btn-set-pin">Simpan PIN</button>
+                  <button type="button" class="btn btn-danger" id="btn-disable-pin">Nonaktifkan</button>
+                </div>
+              </div>
+              <div class="flex-between mt-12" style="padding: 10px 12px; background: var(--surface-2); border-radius: 10px; border: 1px solid var(--border);">
+                <div>
+                  <div style="font-weight: 700; font-size: 13.5px;">Biometrik Sidik Jari (WebAuthn)</div>
+                  <div class="text-muted" style="font-size: 12px;" id="biometric-status-text">Belum terdaftar</div>
+                </div>
+                <div class="flex-gap">
+                  <button type="button" class="btn btn-sm btn-primary" id="btn-register-biometric">👆 Daftarkan</button>
+                  <button type="button" class="btn btn-sm btn-danger" id="btn-remove-biometric" style="display:none;">Hapus</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Master Data: Rekening & Kategori -->
+          <div class="card mt-16">
+            <div class="card-header">
+              <h3 class="card-title">🗂️ Master Data — Rekening &amp; Kategori</h3>
+            </div>
+            <div class="grid-2">
+              <!-- Rekening -->
+              <div>
+                <div class="flex-between mb-12">
+                  <h4 style="margin:0;">Daftar Rekening / Dompet</h4>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-account">+ Rekening</button>
+                </div>
+                <div id="master-accounts-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+              </div>
+
+              <!-- Kategori -->
+              <div>
+                <div class="flex-between mb-12">
+                  <h4 style="margin:0;">Daftar Kategori</h4>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-category">+ Kategori</button>
+                </div>
+                <div id="master-categories-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Backup & Restore JSON v2 -->
+          <div class="card mt-16">
+            <div class="card-header">
+              <h3 class="card-title">💾 Backup &amp; Restore Data (JSON v2 &amp; CSV)</h3>
+            </div>
+            <div class="flex-gap">
+              <button type="button" class="btn btn-primary" id="btn-export-json">⬇️ Unduh Backup JSON v2</button>
+              <label class="btn" style="cursor:pointer;">
+                ⬆️ Pulihkan Backup JSON (v1 / v2)
+                <input type="file" id="input-import-json" accept=".json,application/json" style="display:none;" />
+              </label>
+              <button type="button" class="btn" id="btn-export-all-csv">📊 Ekspor Semua Transaksi (CSV)</button>
+              <button type="button" class="btn btn-danger" id="btn-reset-demo">🗑️ Reset ke Data Awal</button>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="bottom-nav" id="mobile-nav">
+    <button class="bottom-nav-btn active" data-tab="dashboard"><span class="ico">📊</span><span>Beranda</span></button>
+    <button class="bottom-nav-btn" data-tab="transactions"><span class="ico">💸</span><span>Transaksi</span></button>
+    <button class="bottom-nav-btn" data-tab="debts"><span class="ico">🤝</span><span>Hutang</span></button>
+    <button class="bottom-nav-btn" data-tab="budget"><span class="ico">🎯</span><span>Budget</span></button>
+    <button class="bottom-nav-btn" data-tab="reports"><span class="ico">📑</span><span>Laporan</span></button>
+    <button class="bottom-nav-btn" data-tab="settings"><span class="ico">⚙️</span><span>Atur</span></button>
+  </nav>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- 1. Modal Transaksi (Tambah / Edit / Transfer) -->
+  <div id="modal-tx" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-tx-title">Tambah Transaksi</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-tx">✕</button>
+      </div>
+      <form id="form-tx" class="modal-body">
+        <input type="hidden" id="tx-id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Jenis Transaksi</label>
+            <select id="tx-jenis" class="select" required>
+              <option value="expense">Pengeluaran</option>
+              <option value="income">Pemasukan</option>
+              <option value="transfer">Transfer Antar Rekening</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal</label>
+            <input type="date" id="tx-tanggal" class="input" required />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Nominal (Rp)</label>
+            <input type="number" inputmode="numeric" id="tx-nominal" class="input" min="1" step="any" placeholder="Contoh: 25000" required />
+          </div>
+          <div class="form-group" id="tx-rekening-wrap">
+            <label class="form-label" id="tx-rekening-label">Rekening / Dompet</label>
+            <select id="tx-rekening" class="select" required></select>
+          </div>
+          <div class="form-group" id="tx-rekening-tujuan-wrap" style="display:none;">
+            <label class="form-label">Ke Rekening Tujuan</label>
+            <select id="tx-rekening-tujuan" class="select"></select>
+          </div>
+          <div class="form-group" id="tx-kategori-wrap">
+            <label class="form-label">Kategori</label>
+            <select id="tx-kategori" class="select"></select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Catatan</label>
+            <input type="text" id="tx-catatan" class="input" placeholder="Contoh: Makan siang nasi padang" />
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-tx">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Transaksi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Modal Isi Cepat AI (Groq) -->
+  <div id="modal-quick-ai" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">⚡ Isi Cepat AI (Groq)</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-quick-ai">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" style="font-size: 13px; margin: 0;">
+          Tulis transaksi dengan bahasa sehari-hari. AI akan mengisi form transaksi secara otomatis agar bisa Anda periksa sebelum disimpan.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Kalimat Transaksi</label>
+          <textarea id="quick-ai-input" class="textarea" rows="3" placeholder='Contoh: "makan siang 25rb pakai Gopay" atau "transfer 500rb dari BCA ke Dana"'></textarea>
+        </div>
+        <div id="quick-ai-status" class="text-muted" style="font-size: 12.5px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" id="btn-open-chat-from-quick">💬 Pindah ke Chat AI</button>
+        <button type="button" class="btn btn-ai" id="btn-run-quick-ai">✨ Proses ke Form</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Modal Chat AI Transaksi -->
+  <div id="modal-chat-ai" class="modal-backdrop">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">💬 Chat AI Transaksi (Groq)</h3>
+        <div class="flex-gap">
+          <button type="button" class="btn btn-sm" id="btn-clear-ai-chat">Reset Chat</button>
+          <button type="button" class="btn btn-icon" data-close-modal="modal-chat-ai">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="ai-chat-messages" class="chat-messages"></div>
+        <form id="form-ai-chat" class="flex-gap" style="margin-top: 6px;">
+          <input type="text" id="ai-chat-input" class="input" style="flex:1;" placeholder="Ceritakan transaksi Anda... (misal: beli kopi tadi pagi)" required />
+          <button type="submit" class="btn btn-ai" id="btn-send-ai-chat">Kirim</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Modal Catat / Edit Hutang & Piutang -->
+  <div id="modal-debt" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-debt-title">Catat Hutang / Piutang</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-debt">✕</button>
+      </div>
+      <form id="form-debt" class="modal-body">
+        <input type="hidden" id="debt-id" />
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Klasifikasi Transaksi</label>
+            <select id="debt-jenis" class="select" required>
+              <option value="hutang">Hutang (Payable — Uang yang saya pinjam dari pihak lain)</option>
+              <option value="piutang">Piutang (Receivable — Uang yang dipinjamkan ke pihak lain)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama Kontak / Pihak Terkait</label>
+            <input type="text" id="debt-kontak" list="debt-contacts-datalist" class="input" placeholder="Pilih atau ketik nama baru..." required />
+            <datalist id="debt-contacts-datalist"></datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nominal Pokok (Rp)</label>
+            <input type="number" inputmode="numeric" id="debt-nominal" class="input" min="1" step="any" placeholder="Contoh: 500000" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal Transaksi</label>
+            <input type="date" id="debt-tgl-tx" class="input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal Jatuh Tempo</label>
+            <input type="date" id="debt-tgl-tempo" class="input" />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Catatan</label>
+            <input type="text" id="debt-catatan" class="input" placeholder="Keterangan pinjaman / kesepakatan..." />
+          </div>
+          <div class="form-group full">
+            <div class="toggle-row">
+              <div>
+                <div style="font-weight: 700; font-size: 13.5px;">Pengaruhi Saldo Utama</div>
+                <div class="text-muted" style="font-size: 12px;" id="debt-wallet-hint">
+                  Jika aktif: Piutang baru mengurangi saldo kas, Hutang baru menambah saldo kas.
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="debt-affect-wallet" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group full" id="debt-wallet-select-wrap" style="display:none;">
+            <label class="form-label">Pilih Rekening / Dompet Kas</label>
+            <select id="debt-rekening" class="select"></select>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-debt">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Modal Pembayaran & Cicilan Hutang/Piutang -->
+  <div id="modal-debt-pay" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-pay-title">Catat Pembayaran / Cicilan</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-debt-pay">✕</button>
+      </div>
+      <form id="form-debt-pay" class="modal-body">
+        <input type="hidden" id="pay-debt-id" />
+        <div style="padding: 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px;">
+          <div class="flex-between"><span>Pihak Terkait:</span><strong id="pay-info-kontak">-</strong></div>
+          <div class="flex-between mt-12"><span>Nominal Pokok:</span><span id="pay-info-pokok">Rp 0</span></div>
+          <div class="flex-between"><span>Sudah Dibayar:</span><span id="pay-info-paid">Rp 0</span></div>
+          <div class="flex-between"><span>Sisa Tagihan:</span><strong class="text-danger" id="pay-info-remaining">Rp 0</strong></div>
+        </div>
+
+        <div class="flex-gap">
+          <button type="button" class="btn btn-sm btn-success" id="btn-pay-full">Bayar Lunas (100%)</button>
+          <button type="button" class="btn btn-sm" id="btn-pay-half">Cicil 50%</button>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nominal Pembayaran (Rp)</label>
+            <input type="number" inputmode="numeric" id="pay-nominal" class="input" min="1" step="any" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal Pembayaran</label>
+            <input type="date" id="pay-tanggal" class="input" required />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Catatan Cicilan</label>
+            <input type="text" id="pay-catatan" class="input" placeholder="Misal: Cicilan ke-1 via transfer" />
+          </div>
+          <div class="form-group full">
+            <div class="toggle-row">
+              <div>
+                <div style="font-weight: 700; font-size: 13.5px;">Pengaruhi Saldo Utama</div>
+                <div class="text-muted" style="font-size: 12px;">
+                  Terima pembayaran piutang menambah kas; bayar hutang mengurangi kas.
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="pay-affect-wallet" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group full" id="pay-wallet-wrap" style="display:none;">
+            <label class="form-label">Rekening / Dompet Kas</label>
+            <select id="pay-rekening" class="select"></select>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-debt-pay">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Pembayaran</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6. Modal Budget Bulanan -->
+  <div id="modal-budget" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Atur Limit Budget Bulanan</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-budget">✕</button>
+      </div>
+      <form id="form-budget" class="modal-body">
+        <input type="hidden" id="budget-id" />
+        <div class="form-group">
+          <label class="form-label">Bulan</label>
+          <input type="month" id="budget-bulan" class="input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kategori Pengeluaran</label>
+          <select id="budget-kategori" class="select" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Batas Limit (Rp)</label>
+          <input type="number" inputmode="numeric" id="budget-limit" class="input" min="1" step="any" placeholder="Contoh: 1500000" required />
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-budget">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Budget</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. Modal Transaksi Berulang -->
+  <div id="modal-recurring" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-rec-title">Aturan Transaksi Berulang</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-recurring">✕</button>
+      </div>
+      <form id="form-recurring" class="modal-body">
+        <input type="hidden" id="rec-id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Jenis</label>
+            <select id="rec-jenis" class="select" required>
+              <option value="expense">Pengeluaran</option>
+              <option value="income">Pemasukan</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nominal (Rp)</label>
+            <input type="number" inputmode="numeric" id="rec-nominal" class="input" min="1" step="any" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rekening</label>
+            <select id="rec-rekening" class="select" required></select>
+          </div>
+          <div class="form-group" id="rec-tujuan-wrap" style="display:none;">
+            <label class="form-label">Rekening Tujuan</label>
+            <select id="rec-rekening-tujuan" class="select"></select>
+          </div>
+          <div class="form-group" id="rec-kategori-wrap">
+            <label class="form-label">Kategori</label>
+            <select id="rec-kategori" class="select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Frekuensi</label>
+            <select id="rec-frekuensi" class="select" required>
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
+              <option value="monthly" selected>Bulanan</option>
+              <option value="yearly">Tahunan</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Interval (Setiap N)</label>
+            <input type="number" id="rec-interval" class="input" min="1" value="1" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal Mulai</label>
+            <input type="date" id="rec-mulai" class="input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tanggal Selesai (Opsional)</label>
+            <input type="date" id="rec-selesai" class="input" />
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Catatan</label>
+            <input type="text" id="rec-catatan" class="input" placeholder="Contoh: Tagihan Internet / Gaji Bulanan" required />
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-recurring">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Aturan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 8. Modal Master Rekening -->
+  <div id="modal-account" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-acc-title">Tambah Rekening</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-account">✕</button>
+      </div>
+      <form id="form-account" class="modal-body">
+        <input type="hidden" id="acc-id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nama Rekening</label>
+            <input type="text" id="acc-nama" class="input" placeholder="Misal: BCA, GoPay, Tunai" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipe</label>
+            <select id="acc-tipe" class="select">
+              <option value="Tunai">Tunai</option>
+              <option value="Bank">Bank</option>
+              <option value="E-Wallet">E-Wallet</option>
+              <option value="Tabungan/Investasi">Tabungan / Investasi</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Saldo Awal (Rp)</label>
+            <input type="number" inputmode="numeric" id="acc-saldo-awal" class="input" value="0" step="any" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ikon &amp; Warna</label>
+            <div class="flex-gap">
+              <input type="text" id="acc-ikon" class="input" value="💳" style="width: 64px; text-align:center;" />
+              <input type="color" id="acc-warna" class="input" value="#0f766e" style="height: 40px; padding: 3px;" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-account">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Rekening</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 9. Modal Master Kategori -->
+  <div id="modal-category" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-cat-title">Tambah Kategori</h3>
+        <button type="button" class="btn btn-icon" data-close-modal="modal-category">✕</button>
+      </div>
+      <form id="form-category" class="modal-body">
+        <input type="hidden" id="cat-id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nama Kategori</label>
+            <input type="text" id="cat-nama" class="input" placeholder="Misal: Makanan, Gaji, Transport" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Jenis</label>
+            <select id="cat-jenis" class="select">
+              <option value="expense">Pengeluaran</option>
+              <option value="income">Pemasukan</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">Ikon &amp; Warna</label>
+            <div class="flex-gap">
+              <input type="text" id="cat-ikon" class="input" value="🏷️" style="width: 64px; text-align:center;" />
+              <input type="color" id="cat-warna" class="input" value="#0d9488" style="height: 40px; padding: 3px;" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin: 0 -20px -18px;">
+          <button type="button" class="btn" data-close-modal="modal-category">Batal</button>
+          <button type="submit" class="btn btn-primary">Simpan Kategori</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

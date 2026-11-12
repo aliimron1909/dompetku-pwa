@@ -1,0 +1,19 @@
+{
+  "name": "DompetKu — Pencatat Keuangan & Hutang Piutang",
+  "short_name": "DompetKu",
+  "description": "Aplikasi pencatat keuangan pribadi, budget, AI Groq, hutang piutang, dan sinkronisasi Google Sheets (Offline-First PWA).",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
