@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "app.vercel.dompetku_pwa_murex.twa",
-        "sha256_cert_fingerprints": ["65:32:53:9D:3B:C7:3F:F6:11:58:93:EC:79:2A:96:02:D5:D8:08:A2:D1:CC:54:D1:42:37:24:D5:67:D6:E0:C0"]
-      }
-    }]
