@@ -7,10 +7,7 @@
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0f766e",
-  "categories": [
-    "finance",
-    "productivity"
-  ],
+  "categories": ["finance", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
